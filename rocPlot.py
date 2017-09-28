@@ -1,10 +1,8 @@
-import scipy.io as sio
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn import linear_model
 from sklearn.tree import DecisionTreeClassifier
-from sklearn import naive_bayes
 from sklearn import neighbors
 from sklearn import svm
 from sklearn.neural_network import MLPClassifier
@@ -36,41 +34,23 @@ def loadData(misRate=None,method=None):			# load from sqlite given misRate and m
 		con.close()
 		return result
 
-## main
-if __name__=='__main__':
-	misRate = 0.1
-	method = 'bpca'
-	dataList = loadData(misRate=misRate,method=method)
-	dataF = pd.DataFrame(dataList,columns=['X1','X2','X3','X4','X5','X6','X7','X8','X9',
-											'X10','X11','X12','X13','X14','X15','X16','X17',
-											'X18','X19','X20','X21','X22','X23','X24','Y'])
-	XDf = dataF.ix[:,0:24]	# from 0 to 23 ,slice as list 
-	yDf = dataF.ix[:,24]
-	X_train,X_test,y_train,y_test=train_test_split(XDf, yDf,test_size=0.25,
-		random_state=0,stratify=yDf)	# all result is Df or Series
-# svm roc
-gammas=range(1,20)
-train_scores=[]
-test_scores=[]
-for gamma in gammas:
-	cls=svm.SVC(kernel='rbf',gamma=gamma)
-	cls.fit(X_train,y_train)
-	train_scores.append(cls.score(X_train,y_train))
-	test_scores.append(cls.score(X_test, y_test))
-fig=plt.figure()
-ax=fig.add_subplot(1,1,1)
-ax.plot(gammas,train_scores,label="Training score ",marker='+' )
-ax.plot(gammas,test_scores,label= " Testing  score ",marker='o' )
-ax.set_title( "SVC_rbf")
-ax.set_xlabel(r"$\gamma$")
-ax.set_ylabel("score")
-ax.set_ylim(0,1.05)
-ax.legend(loc="best",framealpha=0.5)
-plt.show()
-
+###################################################
+# load data
+misRate = 0.1
+method = 'bpca'
+dataList = loadData(misRate=misRate,method=method)
+dataF = pd.DataFrame(dataList,columns=['X1','X2','X3','X4','X5','X6','X7','X8','X9',
+										'X10','X11','X12','X13','X14','X15','X16','X17',
+										'X18','X19','X20','X21','X22','X23','X24','Y'])
+XDf = dataF.ix[:,0:24]	# from 0 to 23 ,slice as list
+yDf = dataF.ix[:,24]
+X_train,X_test,y_train,y_test=train_test_split(XDf, yDf,test_size=0.25,
+	random_state=0,stratify=yDf)	# all result is Df or Series
+###################################################
+# svc roc
 gamma = 5
 cls = svm.SVC(kernel='rbf',gamma=gamma,probability=True)
-cls.fit(X_train,y_train.ravel())
+cls.fit(X_train,y_train)
 y_score = cls.predict_proba(X_test) # 2 cols
 # draw roc curve for svm
 fig = plt.figure()
@@ -83,17 +63,17 @@ ax.plot([0,1],[0,1],'k--')
 ax.plot(fpr,tpr,'k--')
 ax.set_xlabel('FPR')
 ax.set_ylabel('TPR')
-ax.set_title('ROC')
+ax.set_title('ROC of SVC')
 ax.legend(loc='best')
 ax.set_xlim(0,1)
 ax.set_ylim(0,1)
 ax.grid()
 plt.show()
-
+#####################################################
 # rf roc
 nTree = 100
 clf=ensemble.RandomForestClassifier(n_estimators=nTree)
-clf.fit(X_train,y_train.ravel())
+clf.fit(X_train,y_train)
 y_score = clf.predict_proba(X_test) # 2 cols
 # draw roc curve for rf
 fig = plt.figure()
@@ -106,45 +86,103 @@ ax.plot([0,1],[0,1],'k--')
 ax.plot(fpr,tpr,'k--')
 ax.set_xlabel('FPR')
 ax.set_ylabel('TPR')
-ax.set_title('ROC')
+ax.set_title('ROC of Random Forest')
 ax.legend(loc='best')
 ax.set_xlim(0,1)
 ax.set_ylim(0,1)
 ax.grid()
 plt.show()
 
+
+#####################################################
+# draw roc curve for logistic regressions
+Cs=np.logspace(-2,4,num=100)
+rocs=[]
+for C in Cs:
+	clf = linear_model.LogisticRegression(C=C)
+	clf.fit(X_train, y_train)
+	y_score = clf.predict_proba(X_test)
+	roc = roc_auc_score(y_test,y_score[:,1])
+	rocs.append(roc)
+print('rocs:')
+print(rocs)	# 0.76
+#####################################################
+# draw roc curve for dt
+maxdepth=20
+depths=np.arange(1,maxdepth)
+rocs=[]
+for depth in depths:
+	clf = DecisionTreeClassifier(max_depth=depth)
+	clf.fit(X_train, y_train)
+	y_score = clf.predict_proba(X_test)
+	roc = roc_auc_score(y_test,y_score[:,1])
+	rocs.append(roc)
+print('rocs:')
+print(rocs)	# 0.73
+
+#####################################################
+# draw roc curve for knn
+Ks=np.linspace(1,y_train.size,endpoint=False,dtype='int')
+Ps=[1,2,10]
+rocs=[]
+for P in Ps:
+	for K in Ks:
+		clf=neighbors.KNeighborsClassifier(p=P,n_neighbors=K)
+		clf.fit(X_train,y_train)
+		y_score = clf.predict_proba(X_test)
+		roc = roc_auc_score(y_test,y_score[:,1])
+		rocs.append(roc)
+print('rocs:')
+print(rocs)	# 0.802
+
+#####################################################
+# draw roc curve for adaboost with dt
+clf=ensemble.AdaBoostClassifier(learning_rate=0.05)
+clf.fit(X_train,y_train)
+y_score = clf.predict_proba(X_test)
+roc = roc_auc_score(y_test,y_score[:,1])
+print('roc:')
+print(roc)	# 0.75
+#####################################################
+# draw roc curve for mlp
+hidden_layer_sizes=[(10,),(30,),(100,),(5,5),(10,10),(30,30)] # 候选的 hidden_layer_sizes 参数值组成的数组
+rocs = []
+for itx,size in enumerate(hidden_layer_sizes):
+	clf=MLPClassifier(activation='logistic',max_iter=10000,hidden_layer_sizes=size)
+	clf.fit(X_train,y_train)
+	y_score = clf.predict_proba(X_test)
+	roc = roc_auc_score(y_test,y_score[:,1])
+	rocs.append(roc)
+print('rocs:')
+print(rocs)	# 0.75
+
+#####################################################
 # draw roc curve for xgboost
 from xgboost import XGBClassifier
+from sklearn.model_selection import GridSearchCV
+## tune max_depth and min_weight
 param_test1 = {
 	'max_depth': list(range(3, 10, 2)),
 	'min_child_weight': list(range(1, 6, 2))
 }
-param_test2 = {
-'max_depth': [4, 5, 6],
-'min_child_weight': [4, 5, 6]
-}
-from sklearn import svm, grid_search, datasets
-from sklearn import grid_search
-
-gsearch1 = grid_search.GridSearchCV(
-estimator = XGBClassifier(
-	learning_rate=0.1,
-	n_estimators=140, max_depth=5,
-	min_child_weight=1,
-	gamma=0,
-	subsample=0.8,
-	colsample_bytree=0.8,
-	objective='binary:logistic',
-	nthread=4,
-	scale_pos_weight=1,
-	seed=27),
-param_grid = param_test1,
-scoring = 'roc_auc',
-n_jobs = 4,
-iid = False,
-cv = 5)
-gsearch1.fit(X_train, y_train.ravel())
-y_score = gsearch1.predict_proba(X_test) # 2 cols
+clf1 = GridSearchCV(
+	estimator = XGBClassifier(
+		learning_rate=0.1,
+		n_estimators=140, max_depth=5,
+		min_child_weight=1,
+		gamma=0,
+		subsample=0.8,
+		colsample_bytree=0.8,
+		objective='binary:logistic',
+		nthread=4,
+		scale_pos_weight=1,
+		seed=27),
+	param_grid = param_test1,
+	scoring = 'roc_auc',
+	iid = False,
+	cv = 5)
+clf1.fit(X_train, y_train)
+y_score = clf.predict_proba(X_test) # 2 cols
 # draw roc curve for rf
 fig = plt.figure()
 ax=fig.add_subplot(1,1,1)
@@ -162,11 +200,183 @@ ax.set_xlim(0,1)
 ax.set_ylim(0,1)
 ax.grid()
 plt.show()
-print('gsearch1.grid_scores_')
-print(gsearch1.grid_scores_)
-print('gsearch1.best_params_')
-print(gsearch1.best_params_)
-print('gsearch1.best_score_')
-print(gsearch1.best_score_)
-print('gsearch1.test_score_')
-print(gsearch1.score(X_test,y_test.ravel()))
+print('gseaclf1rch1.best_params_')
+print(clf1.best_params_)	# maxdepth:7 minweight:1
+
+
+## tune gamma
+param_test2 = {
+'gamma': [i / 10.0 for i in range(0, 5)]
+}
+clf2 = GridSearchCV(
+estimator = XGBClassifier(
+	learning_rate=0.1,
+	n_estimators=140,
+	max_depth=7,
+	min_child_weight=1,
+	gamma=0,
+	subsample=0.8,
+	colsample_bytree=0.8,
+	objective='binary:logistic',
+	nthread=4,
+	scale_pos_weight=1,
+	seed=27),
+param_grid = param_test2,
+scoring = 'roc_auc',
+n_jobs = 4,
+iid = False,
+cv = 5)
+clf2.fit(X_train, y_train)
+y_score = clf.predict_proba(X_test) # 2 cols
+# draw roc curve for rf
+fig = plt.figure()
+ax=fig.add_subplot(1,1,1)
+fpr,tpr,_ = roc_curve(y_test,y_score[:,1])
+roc = roc_auc_score(y_test,y_score[:,1])
+print('roc:')
+print(roc)	# 0.788
+ax.plot([0,1],[0,1],'k--')
+ax.plot(fpr,tpr,'k--')
+ax.set_xlabel('FPR')
+ax.set_ylabel('TPR')
+ax.set_title('ROC')
+ax.legend(loc='best')
+ax.set_xlim(0,1)
+ax.set_ylim(0,1)
+ax.grid()
+plt.show()
+print('clf2.best_params_')	# 0.4
+print(clf2.best_params_)
+
+## tune subsample and colsample_bytree
+param_test3 = {
+'subsample': [i / 10.0 for i in range(6, 10)],
+'colsample_bytree': [i / 10.0 for i in range(6, 10)]
+}
+clf3 = GridSearchCV(
+estimator = XGBClassifier(
+	learning_rate=0.1,
+	n_estimators=177,
+	max_depth=7,
+	min_child_weight=1,
+	gamma=0.4,
+	subsample=0.8,
+	colsample_bytree=0.8,
+	objective='binary:logistic',
+	nthread=4,
+	scale_pos_weight=1,
+	seed=27),
+param_grid = param_test3,
+scoring = 'roc_auc',
+n_jobs = 4,
+iid = False,
+cv = 5)
+clf3.fit(X_train, y_train)
+y_score = clf.predict_proba(X_test) # 2 cols
+# draw roc curve for rf
+fig = plt.figure()
+ax=fig.add_subplot(1,1,1)
+fpr,tpr,_ = roc_curve(y_test,y_score[:,1])
+roc = roc_auc_score(y_test,y_score[:,1])
+print('roc:')
+print(roc)	# 0.788
+ax.plot([0,1],[0,1],'k--')
+ax.plot(fpr,tpr,'k--')
+ax.set_xlabel('FPR')
+ax.set_ylabel('TPR')
+ax.set_title('ROC')
+ax.legend(loc='best')
+ax.set_xlim(0,1)
+ax.set_ylim(0,1)
+ax.grid()
+plt.show()
+print('clf3.best_params_')	# 0.8 0.8
+print(clf3.best_params_)
+
+## tune learning rate and reg param
+param_test4 = {
+'learning_rate': [0.01,0.025,0.05,0.075,0.1],
+}
+clf4 = GridSearchCV(
+estimator = XGBClassifier(
+	n_estimators=177,
+	max_depth=7,
+	min_child_weight=1,
+	gamma=0.4,
+	subsample=0.8,
+	colsample_bytree=0.8,
+	objective='binary:logistic',
+	nthread=4,
+	scale_pos_weight=1,
+	seed=27),
+param_grid = param_test4,
+scoring = 'roc_auc',
+n_jobs = 4,
+iid = False,
+cv = 5)
+clf4.fit(X_train, y_train)
+y_score = clf.predict_proba(X_test) # 2 cols
+# draw roc curve for rf
+fig = plt.figure()
+ax=fig.add_subplot(1,1,1)
+fpr,tpr,_ = roc_curve(y_test,y_score[:,1])
+roc = roc_auc_score(y_test,y_score[:,1])
+print('roc:')
+print(roc)	# 0.788
+ax.plot([0,1],[0,1],'k--')
+ax.plot(fpr,tpr,'k--')
+ax.set_xlabel('FPR')
+ax.set_ylabel('TPR')
+ax.set_title('ROC')
+ax.legend(loc='best')
+ax.set_xlim(0,1)
+ax.set_ylim(0,1)
+ax.grid()
+plt.show()
+print('clf4.best_params_')	# 0.01
+print(clf4.best_params_)
+
+## tune reg param
+param_test5 = {
+'reg_alpha': [1e-5, 1e-2, 0.1, 1, 100]
+}
+clf5 = GridSearchCV(
+estimator = XGBClassifier(
+	n_estimators=177,
+	learning_rate=0.01,
+	max_depth=7,
+	min_child_weight=1,
+	gamma=0.4,
+	subsample=0.8,
+	colsample_bytree=0.8,
+	objective='binary:logistic',
+	nthread=4,
+	scale_pos_weight=1,
+	seed=27),
+param_grid = param_test5,
+scoring = 'roc_auc',
+n_jobs = 4,
+iid = False,
+cv = 5)
+clf5.fit(X_train, y_train)
+y_score = clf.predict_proba(X_test) # 2 cols
+# draw roc curve for rf
+fig = plt.figure()
+ax=fig.add_subplot(1,1,1)
+fpr,tpr,_ = roc_curve(y_test,y_score[:,1])
+roc = roc_auc_score(y_test,y_score[:,1])
+print('roc:')
+print(roc)	# 0.788
+ax.plot([0,1],[0,1],'k--')
+ax.plot(fpr,tpr,'k--')
+ax.set_xlabel('FPR')
+ax.set_ylabel('TPR')
+ax.set_title('ROC')
+ax.legend(loc='best')
+ax.set_xlim(0,1)
+ax.set_ylim(0,1)
+ax.grid()
+plt.show()
+print('clf5.best_params_')	# 0.01
+print(clf5.best_params_)
+
