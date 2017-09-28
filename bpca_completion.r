@@ -10,19 +10,14 @@ maxXCol = apply(X,2,max)	# vec length=24
 rowDiv <- function(row,denom){
   result <- row/denom
 	return (result)}
-X = t(apply(X,1,rowDiv,denom=maxXCol))
+X = t(apply(X,1,rowDiv,denom=maxXCol))	# matrix
 	# x = X
 	# dim(x) = c(length(X),1)	# like matlab
 # create rmse dataframe and mape dataframe
+fullXDf <- NULL
 rmseDf <- data.frame(rate=numeric(),avg=numeric(),bpca=numeric(),ppca=numeric())
 mapeDf <- data.frame(rate=numeric(),avg=numeric(),bpca=numeric(),ppca=numeric())
-fullXDf <- data.frame(X1=numeric(),X2=numeric(),X3=numeric(),X4=numeric(),
-							X5=numeric(), X6=numeric(), X7=numeric(), X8=numeric(),
-							X9=numeric(), X10=numeric(),X11=numeric(),X12=numeric(),
-							X13=numeric(),X14=numeric(),X15=numeric(),X16=numeric(),
-							X7=numeric(), X18=numeric(),X19=numeric(),X20=numeric(),
-							X21=numeric(),X22=numeric(),X23=numeric(),X24=numeric(),
-							misRate=numeric(),method=character())
+realXDf <- cbind(data.frame(X),Y)
 # make mat with missing
 misRates <- seq(0.05,0.6,0.05)
 for (misRate in misRates){
@@ -41,9 +36,9 @@ for (misRate in misRates){
 	# methodVec = rep('mean',dim(avgX)[1])
 	# rateVec = rep(misRate,dim(avgX)[1])
 	method = 'mean'
-	avgXDf = cbind(data.frame(avgX),method,misRate)
+	avgXDf = cbind(data.frame(avgX),Y,method,misRate)
 	fullXDf = rbind(fullXDf,avgXDf)
-  cat('dim(fullXDf) is ',dim(fullXDf))
+	cat('dim(fullXDf) is ',dim(fullXDf))
 	  # call pca package to complete misX
 		# listPcaMethods()
 		#  [1] "svd"          "nipals"       "rnipals"     
@@ -55,7 +50,7 @@ for (misRate in misRates){
 	bpcaX <- pca(misX,nPcs=23,method='bpca',maxSteps=500)
 	bpcaX <- completeObs(bpcaX)
 	method = 'bpca'
-	bpcaDf = cbind(data.frame(bpcaX),method,misRate)
+	bpcaDf = cbind(data.frame(bpcaX),Y,method,misRate)
 	fullXDf = rbind(fullXDf,bpcaDf)
 	cat('dim(fullXDf) is ',dim(fullXDf))
 	
@@ -63,7 +58,7 @@ for (misRate in misRates){
 	ppcaX <- pca(misX,nPcs=10,method='ppca', maxIterations = 1000)
 	ppcaX <- completeObs(ppcaX)
 	method = 'ppca'
-	ppcaDf = cbind(data.frame(bpcaX),method,misRate)
+	ppcaDf = cbind(data.frame(bpcaX),Y,method,misRate)
 	fullXDf = rbind(fullXDf,ppcaDf)
 	cat('dim(fullXDf) is ',dim(fullXDf))
 	# bpcaXDf <- cbind(bpcaX,matrix(1,nrow=dim(bpcaX)[1],ncol=1))
@@ -89,9 +84,11 @@ mapeDf
 library(DBI)
 library(RSQLite)
 con <- dbConnect(RSQLite::SQLite(), 'accDetect.db')
+
 if (dbExistsTable(con,'fullX')){
   dbExecute(con, 'DROP TABLE fullX')
 }
+fullXDf = transform(fullXDf,Y=as.integer(Y))	# change numeric to integer
 dbWriteTable(con, 'fullX', fullXDf )
 
 if (dbExistsTable(con,'rmse')){
@@ -103,10 +100,13 @@ if (dbExistsTable(con,'mape')){
   dbExecute(con, 'DROP TABLE mape')
 }
 dbWriteTable(con, 'mape', mapeDf )
+
 if (dbExistsTable(con,'realX')){
   dbExecute(con, 'DROP TABLE realX')
 }
-dbWriteTable(con, 'realX', data.frame(X) )
+realXDf = transform(realXDf,Y=as.integer(Y))
+dbWriteTable(con, 'realX', realXDf )
+
 dbDisconnect(con)
 
 

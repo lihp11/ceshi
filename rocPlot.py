@@ -1,7 +1,7 @@
 import scipy.io as sio
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn import cross_validation
+from sklearn.model_selection import train_test_split
 from sklearn import linear_model
 from sklearn.tree import DecisionTreeClassifier
 from sklearn import naive_bayes
@@ -10,27 +10,44 @@ from sklearn import svm
 from sklearn.neural_network import MLPClassifier
 from sklearn import ensemble
 from sklearn.metrics import roc_curve,roc_auc_score
-def loadData():			# load from sqlite given misRate and method
+import sqlite3
+import pandas as pd
+def loadData(misRate=None,method=None):			# load from sqlite given misRate and method
+	'''
+		misRate:(number) missing rate of X, 0 means origin X
+		method:(string) 'bpca','ppca','mean'
+	'''
 	print('load_data ~')
-	mat_data = sio.loadmat('finaldata.mat')
-
-	X = mat_data['X']
-	X_normed = X/X.max(axis=0)
-	print('X.shape:')
-	print(X.shape)
-	Y = mat_data['Y']
-	print('Y.shape:')
-	print(Y.shape)
-
-	print('end load_data ~')
-	return cross_validation.train_test_split(X_normed, Y,test_size=0.25,
-		random_state=0,stratify=Y)
+	con = sqlite3.connect(r'accDetect.db')
+	cur = con.cursor()
+	if misRate is None:	# return nonmissing X
+		cur.execute('SELECT X1,X2,X3,X4,X5,X6,X7,X8,X9,X10,X11,X12,X13,X14,X15,X16,X17,X18,X19,X20,X21,X22,X23,X24,Y')
+		result = cur.fetchall()
+		print('len(realX):')
+		print(len(result))
+		con.close()
+		return result
+	else:
+		cur.execute('SELECT X1,X2,X3,X4,X5,X6,X7,X8,X9,X10,X11,X12,X13,X14,X15,X16,X17,X18,X19,X20,X21,X22,X23,X24,Y  FROM fullX WHERE method=? and misRate=?',(method,misRate))
+		result = cur.fetchall()
+		# result = list(map(lambda x:x[:-2],result))	# delete misRate and method col
+		print('len(fullX):')
+		print(len(result))
+		con.close()
+		return result
 
 ## main
 if __name__=='__main__':
-	X_train,X_test,y_train,y_test = loadData()
-
-
+	misRate = 0.1
+	method = 'bpca'
+	dataList = loadData(misRate=misRate,method=method)
+	dataF = pd.DataFrame(dataList,columns=['X1','X2','X3','X4','X5','X6','X7','X8','X9',
+											'X10','X11','X12','X13','X14','X15','X16','X17',
+											'X18','X19','X20','X21','X22','X23','X24','Y'])
+	XDf = dataF.ix[:,0:24]	# from 0 to 23 ,slice as list 
+	yDf = dataF.ix[:,24]
+	X_train,X_test,y_train,y_test=train_test_split(XDf, yDf,test_size=0.25,
+		random_state=0,stratify=yDf)	# all result is Df or Series
 # svm roc
 gammas=range(1,20)
 train_scores=[]

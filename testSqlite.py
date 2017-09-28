@@ -14,11 +14,11 @@ cur.executemany(' INSERT INTO person VALUES (?,?,?)',[(3,'marry',20),(4,'jack',2
 
 
 cur.execute('SELECT * FROM person')
-res = cur.fetchall()
+res = cur.fetchall()	# list of tuple
 for line in res:
     print(line)
     cur.execute('SELECT * FROM person')
-    res = cur.fetchone()
+    res = cur.fetchone()	# won't change res in for loop
     print(res)
 
 cur.execute('UPDATE person SET name=? WHERE id=?',('rose',1))
