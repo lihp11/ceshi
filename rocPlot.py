@@ -10,7 +10,7 @@ from sklearn import svm
 from sklearn.neural_network import MLPClassifier
 from sklearn import ensemble
 from sklearn.metrics import roc_curve,roc_auc_score
-def loadData():
+def loadData():			# load from sqlite given misRate and method
 	print('load_data ~')
 	mat_data = sio.loadmat('finaldata.mat')
 
