@@ -58,7 +58,7 @@ for (misRate in misRates){
 	ppcaX <- pca(misX,nPcs=10,method='ppca', maxIterations = 1000)
 	ppcaX <- completeObs(ppcaX)
 	method = 'ppca'
-	ppcaDf = cbind(data.frame(bpcaX),Y,method,misRate)
+	ppcaDf = cbind(data.frame(ppcaX),Y,method,misRate)
 	fullXDf = rbind(fullXDf,ppcaDf)
 	cat('dim(fullXDf) is ',dim(fullXDf))
 	# bpcaXDf <- cbind(bpcaX,matrix(1,nrow=dim(bpcaX)[1],ncol=1))

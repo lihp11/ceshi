@@ -19,44 +19,115 @@ def loadData(misRate=None,method=None):			# load from sqlite given misRate and m
 	con = sqlite3.connect(r'accDetect.db')
 	cur = con.cursor()
 	if misRate is None:	# return nonmissing X
-		cur.execute('SELECT X1,X2,X3,X4,X5,X6,X7,X8,X9,X10,X11,X12,X13,X14,X15,X16,X17,X18,X19,X20,X21,X22,X23,X24,Y')
+		cur.execute('SELECT X1,X2,X3,X4,X5,X6,X7,X8,X9,X10,X11,X12,X13,X14,X15,X16,X17,X18,X19,X20,X21,X22,X23,X24,Y FROM realX')
 		result = cur.fetchall()
 		print('len(realX):')
 		print(len(result))
 		con.close()
-		return result
+		realDataF = pd.DataFrame(result,columns=['X1','X2','X3','X4','X5','X6','X7','X8','X9',
+										'X10','X11','X12','X13','X14','X15','X16','X17',
+										'X18','X19','X20','X21','X22','X23','X24','Y'])
+		realXDf = realDataF.iloc[:,0:24]	# from 0 to 23 ,slice as list
+		realyDf = realDataF.iloc[:,24]
+		X_train,X_test,y_train,y_test=train_test_split(realXDf, realyDf,test_size=0.25,
+			random_state=0,stratify=realyDf)
+		return X_train,X_test,y_train,y_test
 	else:
-		cur.execute('SELECT X1,X2,X3,X4,X5,X6,X7,X8,X9,X10,X11,X12,X13,X14,X15,X16,X17,X18,X19,X20,X21,X22,X23,X24,Y  FROM fullX WHERE method=? and misRate=?',(method,misRate))
+		cur.execute('SELECT X1,X2,X3,X4,X5,X6,X7,X8,X9,X10,X11,X12,X13,X14,X15,X16,X17,X18,X19,X20,X21,X22,X23,X24,Y  FROM fullX WHERE method=? and abs(misRate-?)<0.0001',(method,misRate))
 		result = cur.fetchall()
 		# result = list(map(lambda x:x[:-2],result))	# delete misRate and method col
 		print('len(fullX):')
 		print(len(result))
 		con.close()
-		return result
+		dataF = pd.DataFrame(result,columns=['X1','X2','X3','X4','X5','X6','X7','X8','X9',
+												'X10','X11','X12','X13','X14','X15','X16','X17',
+												'X18','X19','X20','X21','X22','X23','X24','Y'])
+		XDf = dataF.iloc[:,0:24]	# from 0 to 23 ,slice as list
+		yDf = dataF.iloc[:,24]
+		X_train,X_test,y_train,y_test=train_test_split(XDf, yDf,test_size=0.25,
+			random_state=0,stratify=yDf)	# all result is Df or Series
+		return X_train,X_test,y_train,y_test
+
 
 ###################################################
-# load data
-misRate = 0.1
-method = 'bpca'
-dataList = loadData(misRate=misRate,method=method)
-dataF = pd.DataFrame(dataList,columns=['X1','X2','X3','X4','X5','X6','X7','X8','X9',
-										'X10','X11','X12','X13','X14','X15','X16','X17',
-										'X18','X19','X20','X21','X22','X23','X24','Y'])
-XDf = dataF.ix[:,0:24]	# from 0 to 23 ,slice as list
-yDf = dataF.ix[:,24]
-X_train,X_test,y_train,y_test=train_test_split(XDf, yDf,test_size=0.25,
-	random_state=0,stratify=yDf)	# all result is Df or Series
-###################################################
+# global var and add mlMethodRoc: list of dicts with 7 fields
+	# (mlMethod,
+	# compMethod,
+	# misRate,
+	# maxRoc,
+	# paramDict(dict),
+	# fpr(list),
+	# tpr(list))
+methods = [None,'bpca','ppca','mean']
+misRates = np.linspace(0.05,0.6,12)	#np.array with 12 elems
+resultList = []	#list of result dict containing 7 fields
+#############
 # svc roc
-gamma = 5
-cls = svm.SVC(kernel='rbf',gamma=gamma,probability=True)
-cls.fit(X_train,y_train)
-y_score = cls.predict_proba(X_test) # 2 cols
+resultList = []	#list of result dict containing 7 fields
+# gammas= np.logspace(-2,4,num=100)
+gammas= [3]
+mlMethod = 'svc'
+rocs = []
+fprs = []	# list of fpr list
+tprs = []	# list of tpr list
+for method in methods:
+	if method == None:
+		X_train,X_test,y_train,y_test=loadData()
+		for gamma in gammas:
+			clf = svm.SVC(kernel='linear',gamma=gamma,probability=True)
+			clf.fit(X_train,y_train)
+			y_score = clf.predict_proba(X_test) # 2 cols
+
+			fpr,tpr,_ = roc_curve(y_test,y_score[:,1])
+			roc = roc_auc_score(y_test,y_score[:,1])
+			fprs.append(fpr)
+			tprs.append(tpr)
+			rocs.append(roc)
+		maxRoc = max(rocs)
+		indMaxRoc = rocs.index(maxRoc)	# index respect to max roc in rocs list
+		paramDict = {'gamma':gammas[indMaxRoc]}
+		fpr = fprs[indMaxRoc]	# list 
+		tpr = tprs[indMaxRoc]	# list
+
+		resultItem = {'mlMethod':mlMethod,'compMethod':'origin','misRate':0,
+						'maxRoc':maxRoc,'paramDict':paramDict,'fpr':fpr,'tpr':tpr}
+		resultList.append(resultItem)
+		rocs = []
+	else:
+		for misRate in misRates:
+			X_train,X_test,y_train,y_test=loadData(misRate=misRate,method=method)
+			print('compMethod:',method,'misRate:',misRate,'mlMethod: svc')
+			for gamma in gammas:
+				clf = svm.SVC(kernel='linear',gamma=gamma,probability=True)
+				clf.fit(X_train,y_train)
+				y_score = clf.predict_proba(X_test) # 2 cols
+
+				fpr,tpr,_ = roc_curve(y_test,y_score[:,1])
+				roc = roc_auc_score(y_test,y_score[:,1])
+				fprs.append(fpr)
+				tprs.append(tpr)
+				rocs.append(roc)
+			maxRoc = max(rocs)
+			indMaxRoc = rocs.index(maxRoc)	# index respect to max roc in rocs list
+			paramDict = {'gamma':gammas[indMaxRoc]}
+			fpr = fprs[indMaxRoc]	# list 
+			tpr = tprs[indMaxRoc]	# list
+			resultItem = {'mlMethod':mlMethod,'compMethod':method,'misRate':misRate,
+							'maxRoc':maxRoc,'paramDict':paramDict,'fpr':fpr,'tpr':tpr}
+			resultList.append(resultItem)
+			rocs = []
+## for teminal output
+resultDf=pd.DataFrame(resultList)
+resultDf[['compMethod','misRate','maxRoc']]
+
+		
+# print('rocs:')
+# print(rocs)	# 0.82 max
+
 # draw roc curve for svm
 fig = plt.figure()
 ax=fig.add_subplot(1,1,1)
 fpr,tpr,_ = roc_curve(y_test,y_score[:,1])
-roc = roc_auc_score(y_test,y_score[:,1])
 print('roc:')
 print(roc)	# 0.796
 ax.plot([0,1],[0,1],'k--')
